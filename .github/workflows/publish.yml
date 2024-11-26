@@ -1,0 +1,102 @@
+name: Build and publish the release
+
+on:
+  release:
+    types: [prereleased, released]
+
+jobs:
+  build:
+    name: Build the release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+          
+      - name: Get git release tag
+        run: echo "git-release-tag=golem-cert-companion $(git describe --tags)" >> $GITHUB_OUTPUT
+        id: git_describe
+        
+      - name: Get package version
+        run: |
+          VERSION=$(python -c "from configparser import ConfigParser; p = ConfigParser(); p.read('pyproject.toml'); print(p['project']['version'])")
+          echo "package-version=golem-cert-companion $VERSION" >> $GITHUB_OUTPUT
+        id: package_version
+        
+      - name: Fail on version mismatch
+        run: exit 1
+        if: ${{ steps.git_describe.outputs.git-release-tag != steps.package_version.outputs.package-version }}
+        
+      - name: Build the release
+        run: python -m build
+        
+      - name: Store the built package
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  test_publish:
+    needs: [build]
+    name: Publish the release to test.pypi
+    runs-on: ubuntu-latest
+    if: ${{ github.event.action == 'prereleased' }}
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: Install twine
+        run: pip install twine
+        
+      - name: Retrieve the built package
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+          
+      - name: Publish to TestPyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
+        run: twine upload dist/*
+
+  publish:
+    needs: [build]
+    name: Publish the release
+    runs-on: ubuntu-latest
+    if: ${{ github.event.action == 'released' }}
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: Install twine
+        run: pip install twine
+        
+      - name: Retrieve the built package
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+          
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*
