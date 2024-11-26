@@ -373,7 +373,7 @@ class CertificateManager:
         print('    1. Download the certificate from: [YOUR_DOWNLOAD_LINK]')
         print('    2. Run this command:')
         print(
-            f'    {Fore.GREEN}ya-provider --rule set outbound partner import-cert root-certificate.signed.json --mode all{Style.RESET_ALL}"\n')
+            f'    {Fore.GREEN}ya-provider rule set outbound partner import-cert root-cert-template.signed.json --mode all{Style.RESET_ALL}"\n')
 
         print(f"{Fore.CYAN}Using the Node Descriptor in Tasks:{Style.RESET_ALL}")
         print(
