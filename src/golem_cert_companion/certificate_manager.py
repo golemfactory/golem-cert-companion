@@ -7,8 +7,8 @@ import json
 import subprocess
 from urllib.parse import urlparse
 import sys
-from .templates import DEFAULT_NODE_DESCRIPTOR, DEFAULT_ROOT_CERT_TEMPLATE
-
+from .templates import DEFAULT_NODE_DESCRIPTOR, DEFAULT_ROOT_CERT_TEMPLATE, DEFAULT_WHITELIST_MANIFEST, DEFAULT_UNRESTRICTED_MANIFEST
+import re
 
 # Initialize colorama for cross-platform colored output
 init()
@@ -25,21 +25,72 @@ class CertificateManager:
         self.public_key_data = None
         self.binary_manager = BinaryManager()
         self.binary_path = self.binary_manager.ensure_binary()
-        self.ensure_template_files()
+        self.image_url = None
+        self.image_hash = None
 
-    def ensure_template_files(self):
-        """Ensure template files exist, create them if they don't"""
-        if not os.path.exists("node-descriptor.json"):
-            with open("node-descriptor.json", 'w') as f:
-                json.dump(DEFAULT_NODE_DESCRIPTOR, f, indent=2)
-            print(
-                f"{Fore.GREEN}Created default node-descriptor.json{Style.RESET_ALL}")
+    def is_valid_sha3(self, hash_str):
+        """Validates if the string is a valid SHA3 hash (56 hex characters)"""
+        return bool(re.match(r'^[a-fA-F0-9]{56}$', hash_str))
 
-        if not os.path.exists("root-cert-template.json"):
-            with open("root-cert-template.json", 'w') as f:
-                json.dump(DEFAULT_ROOT_CERT_TEMPLATE, f, indent=2)
-            print(
-                f"{Fore.GREEN}Created default root-cert-template.json{Style.RESET_ALL}")
+    def create_manifest(self):
+        print(f"\n{Fore.YELLOW}=== Manifest Creation ==={Style.RESET_ALL}")
+
+        # Get image information
+        print(f"\nYou can either provide a URL to download the image or its SHA3 hash.")
+        while True:
+            image_type = input(f"{Fore.CYAN}Enter 'url' or 'hash' [url]: {Style.RESET_ALL}").lower()
+            if not image_type:
+                image_type = 'url'
+            if image_type in ['url', 'hash']:
+                break
+            print(f"{Fore.RED}Please enter 'url' or 'hash'{Style.RESET_ALL}")
+
+        if image_type == 'url':
+            while True:
+                self.image_url = input(f"{Fore.CYAN}Enter image URL (e.g., https://example.com/image.gvmi): {Style.RESET_ALL}").strip()
+                if self.validate_url(self.image_url):
+                    break
+                print(f"{Fore.RED}Invalid URL format{Style.RESET_ALL}")
+        else:
+            while True:
+                hash_input = input(f"{Fore.CYAN}Enter SHA3 hash (without 'sha3:' prefix), e.g., '505509fce98bfb9067125334e58a3340615f863acf258d7275ca1265': {Style.RESET_ALL}").strip()
+                if self.is_valid_sha3(hash_input):
+                    self.image_hash = f"sha3:{hash_input}"
+                    break
+                print(f"{Fore.RED}Invalid SHA3 hash format. Should be 56 hex characters{Style.RESET_ALL}")
+
+        # Get manifest metadata
+        manifest_name = input(f"{Fore.CYAN}Enter manifest name: {Style.RESET_ALL}").strip()
+        manifest_desc = input(f"{Fore.CYAN}Enter manifest description: {Style.RESET_ALL}").strip()
+
+        # Create manifest based on outbound mode
+        manifest = (DEFAULT_WHITELIST_MANIFEST if self.outbound_mode == "whitelist"
+                    else DEFAULT_UNRESTRICTED_MANIFEST).copy()
+
+        # Update manifest content
+        now = datetime.now(tz.UTC)
+        manifest["createdAt"] = now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        manifest["expiresAt"] = (now + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+        manifest["metadata"].update({
+            "name": manifest_name,
+            "description": manifest_desc
+        })
+
+        if self.image_url:
+            manifest["payload"][0]["urls"] = [self.image_url]
+        if self.image_hash:
+            manifest["payload"][0]["hash"] = self.image_hash
+
+        if self.outbound_mode == "whitelist":
+            manifest["compManifest"]["net"]["inet"]["out"]["urls"] = self.urls
+
+        # Save manifest
+        filename = "manifest-whitelist.json" if self.outbound_mode == "whitelist" else "manifest-unrestricted.json"
+        with open(filename, 'w') as f:
+            json.dump(manifest, f, indent=2)
+
+        print(f"\n{Fore.GREEN}Created manifest: {filename}{Style.RESET_ALL}")
 
     def is_valid_eth_address(self, address):
         """Validates if the string is a 42-character Ethereum hex address starting with 0x"""
@@ -57,11 +108,11 @@ class CertificateManager:
             return process.stdout.strip()
         except subprocess.CalledProcessError as e:
             print(
-                f"{Fore.RED}  - Error: Command failed with error code {e.returncode}:\n{e.stderr}{Style.RESET_ALL}")
+                f"{Fore.RED}Error: Command failed with error code {e.returncode}:\n{e.stderr}{Style.RESET_ALL}")
             sys.exit(1)
         except FileNotFoundError:
             print(
-                f"{Fore.RED}  - Error: Command not found: {command[0]}. Is it installed and in your PATH?{Style.RESET_ALL}")
+                f"{Fore.RED}Error: Command not found: {command[0]}. Is it installed and in your PATH?{Style.RESET_ALL}")
             sys.exit(1)
 
     def update_json_file(self, filepath, update_function):
@@ -79,7 +130,7 @@ class CertificateManager:
                 json.dump(updated_data, f, indent=2)
         except json.JSONDecodeError:
             print(
-                f"{Fore.RED}  - Error: Invalid JSON format in file: {filepath}{Style.RESET_ALL}")
+                f"{Fore.RED}Error: Invalid JSON format in file: {filepath}{Style.RESET_ALL}")
             sys.exit(1)
 
     def validate_url(self, url):
@@ -109,7 +160,7 @@ class CertificateManager:
         current_email = self.get_current_value(
             "root-cert-template.json", ["certificate", "subject", "contact", "email"])
 
-        print("\nCertificate Holder Information:")
+        print(f"\n{Fore.YELLOW}=== Certificate Holder Information ==={Style.RESET_ALL}")
         self.display_name = input(
             f"{Fore.CYAN}Enter your name{' (press Enter for ' + current_name + ')' if current_name else ''}: {Style.RESET_ALL}").strip()
         if not self.display_name and current_name:
@@ -123,8 +174,7 @@ class CertificateManager:
                 break
             if '@' in self.email and '.' in self.email:  # Basic email validation
                 break
-            print(
-                f"{Fore.RED}Invalid email format. Please enter a valid email address.{Style.RESET_ALL}")
+            print(f"{Fore.RED}Invalid email format. Please enter a valid email address.{Style.RESET_ALL}")
 
         # Read the public key data from root.pub.json
         try:
@@ -132,13 +182,13 @@ class CertificateManager:
                 self.public_key_data = json.load(f)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             print(
-                f"{Fore.RED}  - Error reading root.pub.json: {str(e)}{Style.RESET_ALL}")
+                f"{Fore.RED}Error reading root.pub.json: {str(e)}{Style.RESET_ALL}")
             sys.exit(1)
 
         # Create new data structure with schema first
         new_data = {
             "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
-            "certificate": data["certificate"]
+            "certificate": data.get("certificate", {})
         }
 
         # Update subject information
@@ -161,14 +211,6 @@ class CertificateManager:
         }
 
         new_data["certificate"]["validityPeriod"] = self.validity_period
-
-        print(f"{Fore.GREEN}  - Updated certificate information:{Style.RESET_ALL}")
-        print(f"    - Name: {self.display_name}")
-        print(f"    - Email: {self.email}")
-        print(
-            f"    - Validity: {self.validity_period['notBefore']} to {self.validity_period['notAfter']}")
-        print(
-            f"{Fore.GREEN}  - Added public key data from root.pub.json{Style.RESET_ALL}")
 
         return new_data
 
@@ -198,7 +240,7 @@ class CertificateManager:
                 }
         except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
             print(
-                f"{Fore.RED}  - Error reading validity period from signed certificate: {str(e)}{Style.RESET_ALL}")
+                f"{Fore.RED}Error reading validity period from signed certificate: {str(e)}{Style.RESET_ALL}")
             sys.exit(1)
 
         data["$schema"] = "https://schemas.golem.network/v1/node-descriptor.schema.json"
@@ -208,68 +250,70 @@ class CertificateManager:
         if self.outbound_mode == "whitelist":
             data["nodeDescriptor"]["permissions"]["outbound"] = {
                 "urls": self.urls}
-            print(
-                f"{Fore.GREEN}  - Node descriptor updated with specific URLs{Style.RESET_ALL}")
         else:
             data["nodeDescriptor"]["permissions"]["outbound"] = "unrestricted"
-            print(
-                f"{Fore.GREEN}  - Node descriptor updated with unrestricted outbound access{Style.RESET_ALL}")
 
-        # Display the updated validity period
-        print(
-            f"{Fore.GREEN}  - Node descriptor validity period set from {self.validity_period['notBefore']} to {self.validity_period['notAfter']}{Style.RESET_ALL}")
         return data
 
     def main(self):
-        # --- Step 1: Generate Root Key Pair ---
-        print(
-            f"{Fore.CYAN}Step 1: Generating root key pair...{Style.RESET_ALL}")
+        # Generate Root Key Pair
         self.run_command(["create-key-pair", "root"])
 
-        # --- Step 2: Add $schema and Update Dates in root-cert-template.json ---
-        print(
-            f"{Fore.CYAN}Step 2: Adding schema and updating dates in root-cert-template.json...{Style.RESET_ALL}")
+        # Add $schema and Update Dates in root-cert-template.json
         self.update_json_file(
             "root-cert-template.json", self.update_certificate_template)
 
-        # --- Step 3: Configure Outbound Permissions ---
-        print(f"\n{Fore.YELLOW}Outbound Access Configuration{Style.RESET_ALL}")
+        # Configure Outbound Permissions
+        print(f"\n{Fore.YELLOW}=== Outbound Access Configuration ==={Style.RESET_ALL}")
         print("You can either:")
         print(
-            "1. Allow unrestricted access to all URLs (easiest to use but requires more trust from providers)")
+            f"{Fore.GREEN}1. Request unrestricted access to all URLs{Style.RESET_ALL} (requires more trust from providers)")
         print(
-            "2. Specify a whitelist of allowed URLs (more restrictive, easier to gain provider trust by showing specific URLs)")
+            f"{Fore.GREEN}2. Specify a whitelist of allowed URLs{Style.RESET_ALL} (more restrictive, easier to gain provider trust)")
 
         current_outbound = self.get_current_value(
             "root-cert-template.json", ["certificate", "permissions", "outbound"])
-        current_mode = "y" if current_outbound == "unrestricted" else "n" if isinstance(
-            current_outbound, dict) else None
+        if current_outbound == "unrestricted":
+            current_mode = "y"
+        elif isinstance(current_outbound, dict):
+            current_mode = "n"
+        else:
+            current_mode = None
 
         whitelist_choice = input(
-            f"\nDo you want to restrict outbound access to specific URLs? (y=unrestricted, n=whitelist){' (press Enter for ' + current_mode + ')' if current_mode else ''}: ").lower()
+            f"\n{Fore.CYAN}Do you want to request unrestricted outbound access to all URLs? (y/n){' (press Enter for ' + ('y' if current_mode == 'y' else 'n') + ')' if current_mode else ''}: {Style.RESET_ALL}").lower()
         if not whitelist_choice and current_mode:
             whitelist_choice = current_mode
 
-        if whitelist_choice == "n":
+        if whitelist_choice == "y":
+            self.outbound_mode = "unrestricted"
+
+            def update_outbound_unrestricted(data):
+                data["certificate"]["permissions"]["outbound"] = "unrestricted"
+                return data
+
+            self.update_json_file(
+                "root-cert-template.json", update_outbound_unrestricted)
+        else:
             self.outbound_mode = "whitelist"
             current_urls = self.get_current_value("root-cert-template.json", [
                                                   "certificate", "permissions", "outbound", "urls"]) or []
             self.urls = []
 
             print(
-                "\nEnter URLs to whitelist (must include https:// or http://)")
+                f"\n{Fore.YELLOW}Enter URLs to whitelist (must include https:// or http://){Style.RESET_ALL}")
             print("You must enter at least one URL")
 
             if current_urls:
                 print(f"\nCurrent URLs:")
                 for url in current_urls:
                     print(f"  - {url}")
-                use_current = input("\nUse current URLs? (y/n): ").lower()
+                use_current = input(f"{Fore.CYAN}Use current URLs? (y/n): {Style.RESET_ALL}").lower()
                 if use_current == 'y':
                     self.urls = current_urls
 
             while not self.urls:  # Keep asking until at least one valid URL is entered
-                url = input(f"{Fore.CYAN}Enter URL: {Style.RESET_ALL}").strip()
+                url = input(f"{Fore.CYAN}Enter URL (e.g., https://example.com/api): {Style.RESET_ALL}").strip()
                 if self.validate_url(url):
                     self.urls.append(url)
                 else:
@@ -277,7 +321,7 @@ class CertificateManager:
                         f"{Fore.RED}Invalid URL format. Please use format like 'https://example.com'{Style.RESET_ALL}")
 
             # Allow adding additional URLs
-            print("\nEnter additional URLs (or press Enter when done)")
+            print(f"{Fore.YELLOW}Enter additional URLs (or press Enter when done){Style.RESET_ALL}")
             while True:
                 url = input(f"{Fore.CYAN}Enter URL: {Style.RESET_ALL}").strip()
                 if not url:
@@ -291,38 +335,17 @@ class CertificateManager:
             def update_outbound_urls(data):
                 data["certificate"]["permissions"]["outbound"] = {
                     "urls": self.urls}
-                print(
-                    f"{Fore.GREEN}  - Outbound access restricted to:{Style.RESET_ALL}")
-                for url in self.urls:
-                    print(f"    - {url}")
                 return data
 
             self.update_json_file(
                 "root-cert-template.json", update_outbound_urls)
 
-        else:
-            self.outbound_mode = "unrestricted"
-
-            def update_outbound_unrestricted(data):
-                data["certificate"]["permissions"]["outbound"] = "unrestricted"
-                print(
-                    f"{Fore.GREEN}  - Outbound access: Unrestricted (all URLs allowed){Style.RESET_ALL}")
-                return data
-
-            self.update_json_file(
-                "root-cert-template.json", update_outbound_unrestricted)
-
-        # --- Step 4: Self-Sign Certificate ---
-        print(
-            f"\n{Fore.CYAN}Step 3: Signing the certificate...{Style.RESET_ALL}")
+        # Self-Sign Certificate
         self.run_command(
             ["self-sign-certificate", "root-cert-template.json", "root.key.json"])
-        print(
-            f"{Fore.GREEN}  - Certificate signed successfully! Created root-cert-template.signed.json{Style.RESET_ALL}")
 
-        # --- Step 5: Update Node Descriptor ---
-        print(
-            f"\n{Fore.CYAN}Step 4: Updating node descriptor...{Style.RESET_ALL}")
+        # Update Node Descriptor
+        print(f"\n{Fore.YELLOW}=== Node Descriptor Configuration ==={Style.RESET_ALL}")
         current_node_id = self.get_current_value(
             "node-descriptor.json", ["nodeDescriptor", "nodeId"])
 
@@ -333,7 +356,7 @@ class CertificateManager:
 
         while True:
             self.node_id = input(
-                f"\nEnter your Node ID{' (press Enter for ' + current_node_id + ')' if current_node_id else ''}: ").lower()
+                f"{Fore.CYAN}Enter your Node ID{' (press Enter for ' + current_node_id + ')' if current_node_id else ''}: {Style.RESET_ALL}").lower()
             if not self.node_id and current_node_id:
                 self.node_id = current_node_id
                 break
@@ -345,56 +368,55 @@ class CertificateManager:
         self.update_json_file(
             "node-descriptor.json", self.update_node_descriptor)
 
-        # --- Step 6: Sign Node Descriptor ---
-        print(
-            f"\n{Fore.CYAN}Step 5: Signing the node descriptor...{Style.RESET_ALL}")
+        # Sign Node Descriptor
         self.run_command(["sign", "node-descriptor.json",
-                         "root-cert-template.signed.json", "root.key.json"])
-        print(
-            f"{Fore.GREEN}  - Node descriptor signed successfully! Created node-descriptor.signed.json{Style.RESET_ALL}")
+                          "root-cert-template.signed.json", "root.key.json"])
 
-        # --- Step 7: Final Instructions and User Guidance ---
+        # Create Manifest
+        self.create_manifest()
+
+        # Final Instructions and User Guidance
         print(f"\n{Fore.GREEN}{'='*70}")
         print(f"🎉  Setup Complete!  🎉")
         print(f"{'='*70}{Style.RESET_ALL}\n")
 
-        print("Congratulations! You just created your self-signed certificate for outbound internet access in tasks.")
+        print(f"Congratulations! You have successfully created your self-signed certificate for outbound internet access in tasks.")
         print(
-            "For your tasks to work, providers need to trust your certificate before your outbound requests will work inside tasks.\n")
+            f"For your tasks to work, providers need to trust your certificate before your outbound requests will work inside tasks.\n")
 
-        print(f"{Fore.CYAN}Next Steps:{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Next Steps:{Style.RESET_ALL}")
         print(
-            "1. Make your certificate available for download (e.g. via GitHub Gist)")
+            f"1. Make your certificate available for download (e.g., via GitHub Gist)")
         print(
-            "2. Post a message in the Golem Discord #providers channel (chat.golem.network):")
-        print(f"{Fore.YELLOW}Example message:{Style.RESET_ALL}")
-        print('    "Hi providers! I have a task that requires outbound internet access.')
-        print('    To run it, you\'ll need to trust my certificate first:')
-        print('    1. Download the certificate from: [YOUR_DOWNLOAD_LINK]')
-        print('    2. Run this command:')
+            f"2. Post a message in the Golem Discord #providers channel (chat.golem.network):")
+        print(f"\n{Fore.CYAN}Example message:{Style.RESET_ALL}")
+        print(f"    \"Hi providers! I have a task that requires outbound internet access.")
+        print(f"    To run it, you need to trust my certificate:")
+        print(f"    1. Download the certificate from: [YOUR_DOWNLOAD_LINK]")
+        print(f"    2. Run this command:")
         print(
-            f'    {Fore.GREEN}ya-provider rule set outbound partner import-cert root-cert-template.signed.json --mode all{Style.RESET_ALL}"\n')
+            f"    {Fore.GREEN}ya-provider rule set outbound partner import-cert root-cert-template.signed.json --mode all{Style.RESET_ALL}\"")
 
-        print(f"{Fore.CYAN}Using the Node Descriptor in Tasks:{Style.RESET_ALL}")
+        print(f"\n{Fore.YELLOW}Using the Node Descriptor in Tasks:{Style.RESET_ALL}")
         print(
-            "When requesting tasks, you must include the node descriptor:")
+            f"When requesting tasks, you must include the node descriptor:")
         print(
-            "- For Python yapapi: Include 'node-descriptor.json' in your Task model")
+            f"- For Python yapapi: Include 'node-descriptor.json' in your Task model")
         print(
-            "- For JS/TS yajsapi: Pass the descriptor in your Task definition")
+            f"- For JS/TS yajsapi: Pass the descriptor in your Task definition")
         print(
-            "- For CLI commands: Use --node-descriptor node-descriptor.json\n")
+            f"- For CLI commands: Use --node-descriptor node-descriptor.json\n")
 
         print(f"{Fore.YELLOW}Documentation:{Style.RESET_ALL}")
         print(
-            "For detailed examples of using node descriptors with different task types, visit:")
+            f"For detailed examples of using node descriptors with different task types, visit:")
         print(
-            "https://docs.golem.network/docs/creators/javascript/guides/using-vm-runtime")
+            f"{Fore.CYAN}https://docs.golem.network/docs/creators/javascript/guides/using-vm-runtime{Style.RESET_ALL}")
         print(
-            "https://docs.golem.network/docs/creators/python/guides/using-vm-runtime\n")
+            f"{Fore.CYAN}https://docs.golem.network/docs/creators/python/guides/using-vm-runtime{Style.RESET_ALL}\n")
 
         print(
-            f"{Fore.CYAN}Thank you for contributing to the Golem Network!{Style.RESET_ALL}\n")
+            f"{Fore.GREEN}Thank you for contributing to the Golem Network!{Style.RESET_ALL}\n")
 
 
 # Add the module-level main function
