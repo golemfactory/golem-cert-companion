@@ -2,9 +2,7 @@
 name = "golem-cert-companion"
 version = "0.1.0"
 description = "Certificate companion for Golem"
-authors = [
-    {name = "Phillip", email = "phillip@golem.network"},
-]
+authors = [{name = "Phillip", email = "phillip@golem.network"}]
 dependencies = [
     "colorama>=0.4.4",
     "python-dateutil>=2.8.2", 
