@@ -381,42 +381,20 @@ class CertificateManager:
         print(f"{'='*70}{Style.RESET_ALL}\n")
 
         print(f"Congratulations! You have successfully created your self-signed certificate for outbound internet access in tasks.")
-        print(
-            f"For your tasks to work, providers need to trust your certificate before your outbound requests will work inside tasks.\n")
+        print(f"To enable outbound requests for your tasks, providers need to trust your certificate.\n")
 
         print(f"{Fore.YELLOW}Next Steps:{Style.RESET_ALL}")
-        print(
-            f"1. Make your certificate available for download (e.g., via GitHub Gist)")
-        print(
-            f"2. Post a message in the Golem Discord #providers channel (chat.golem.network):")
-        print(f"\n{Fore.CYAN}Example message:{Style.RESET_ALL}")
-        print(f"    \"Hi providers! I have a task that requires outbound internet access.")
-        print(f"    To run it, you need to trust my certificate:")
-        print(f"    1. Download the certificate from: [YOUR_DOWNLOAD_LINK]")
-        print(f"    2. Run this command:")
-        print(
-            f"    {Fore.GREEN}ya-provider rule set outbound partner import-cert root-cert-template.signed.json --mode all{Style.RESET_ALL}\"")
+        print(f"1. Make your signed certificate available for providers (e.g., upload it to GitHub Gist).")
+        print(f"2. Share your certificate and request trust from providers in the Golem Discord `#providers` channel:")
+        print(f"   {Fore.CYAN}https://chat.golem.network{Style.RESET_ALL}")
+        print(f"   Provide the download link and include instructions to import it using:")
+        print(f"   {Fore.GREEN}ya-provider rule set outbound partner import-cert root-cert-template.signed.json --mode all{Style.RESET_ALL}\n")
 
-        print(f"\n{Fore.YELLOW}Using the Node Descriptor in Tasks:{Style.RESET_ALL}")
-        print(
-            f"When requesting tasks, you must include the node descriptor:")
-        print(
-            f"- For Python yapapi: Include 'node-descriptor.json' in your Task model")
-        print(
-            f"- For JS/TS yajsapi: Pass the descriptor in your Task definition")
-        print(
-            f"- For CLI commands: Use --node-descriptor node-descriptor.json\n")
+        print(f"3. Attach the generated `manifest.json` and `node-descriptor.signed.json` to your tasks.")
+        print(f"For detailed integration guides, refer to the following resources:\n")
+        print(f"   - {Fore.CYAN}dapp-runner: https://docs.golem.network/docs/creators/dapps/internet-access-in-dapps{Style.RESET_ALL}\n")
 
-        print(f"{Fore.YELLOW}Documentation:{Style.RESET_ALL}")
-        print(
-            f"For detailed examples of using node descriptors with different task types, visit:")
-        print(
-            f"{Fore.CYAN}https://docs.golem.network/docs/creators/javascript/guides/using-vm-runtime{Style.RESET_ALL}")
-        print(
-            f"{Fore.CYAN}https://docs.golem.network/docs/creators/python/guides/using-vm-runtime{Style.RESET_ALL}\n")
-
-        print(
-            f"{Fore.GREEN}Thank you for contributing to the Golem Network!{Style.RESET_ALL}\n")
+        print(f"{Fore.GREEN}Thank you for contributing to the Golem Network!{Style.RESET_ALL}\n")
 
 
 # Add the module-level main function

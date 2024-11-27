@@ -12,6 +12,8 @@ With a single command and a few simple prompts, you can:
 - Configure outbound access (unrestricted or URL whitelist)
 - Generate a properly signed node descriptor
 
+Learn more about the tool and its purpose in our [detailed guide](https://docs.golem.network/docs/creators/tools/golem-cert-companion).
+
 ## Installation
 
 ```bash
@@ -24,6 +26,11 @@ pip install golem-cert-companion
 ```bash
 golem-cert-companion
 ```
+or use the shortcut:
+```bash
+gcert
+```
+
 
 2. Answer a few simple questions:
    - Your name and email
@@ -36,26 +43,20 @@ That's it! The tool handles all the complex certificate generation and signing a
 
 After generating your certificate:
 
-1. Share your signed certificate (`root-cert-template.signed.json`) with providers
+1. Share your signed certificate (`root-cert-template.signed.json`) with providers.
 2. Providers can enable your outbound access by running:
 ```bash
 ya-provider rule set outbound partner import-cert root-cert-template.signed.json --mode all
 ```
+
 ## Using in Your Tasks
 
-We've covered in our documentation how to use the files in your tasks:
+Once you've set up outbound networking, refer to our SDK-specific guides for using the generated files in your tasks:
 
-### Yapapi
-https://...
-
-### golem-js
-https://...
-
-### Dapp-runner (golem-compose)
-https://...
-
+<!-- - **[Yapapi (Python)](https://docs.golem.network/docs/creators/python/guides/using-vm-runtime)**
+- **[Golem-js](https://docs.golem.network/docs/creators/javascript/guides/using-vm-runtime)** -->
+- **[Dapp-runner (Golem Compose)](https://docs.golem.network/docs/creators/dapps/internet-access-in-dapps)**
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
