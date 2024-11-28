@@ -397,6 +397,7 @@ class CertificateManager:
         print(f"3. Attach the generated `manifest.json` and `node-descriptor.signed.json` to your tasks.")
         print(f"For detailed integration guides, refer to the following resources:\n")
         print(f"   - {Fore.CYAN}dapp-runner: https://docs.golem.network/docs/creators/dapps/internet-access-in-dapps{Style.RESET_ALL}\n")
+        print(f"   - {Fore.CYAN}yapapi: https://docs.golem.network/docs/creators/python/tutorials/service-example-6-external-api-request{Style.RESET_ALL}\n")
 
         print(f"{Fore.GREEN}Thank you for contributing to the Golem Network!{Style.RESET_ALL}\n")
 

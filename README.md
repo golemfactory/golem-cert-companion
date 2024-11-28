@@ -53,8 +53,8 @@ ya-provider rule set outbound partner import-cert root-cert-template.signed.json
 
 Once you've set up outbound networking, refer to our SDK-specific guides for using the generated files in your tasks:
 
-<!-- - **[Yapapi (Python)](https://docs.golem.network/docs/creators/python/guides/using-vm-runtime)**
-- **[Golem-js](https://docs.golem.network/docs/creators/javascript/guides/using-vm-runtime)** -->
+**[Yapapi (Python)](https://docs.golem.network/docs/creators/python/tutorials/service-example-6-external-api-request)**
+<!-- - **[Golem-js](https://docs.golem.network/docs/creators/javascript/guides/using-vm-runtime)** -->
 - **[Dapp-runner (Golem Compose)](https://docs.golem.network/docs/creators/dapps/internet-access-in-dapps)**
 
 ## Contributing
